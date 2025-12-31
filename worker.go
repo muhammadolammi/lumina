@@ -10,7 +10,15 @@ import (
 // worker is our "Analyzer"
 func worker(id int, logs <-chan string, wg *sync.WaitGroup, stats *Stats) {
 	defer wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Worker %d: ⚠️ RECOVERED from a critical error: %v\n", id, r)
+		}
+	}()
 	for rawLog := range logs {
+		if rawLog == "PANIC" {
+			panic("simulated catastrophic failure!")
+		}
 		logEntry := LogEntry{}
 
 		err := json.Unmarshal([]byte(rawLog), &logEntry)
