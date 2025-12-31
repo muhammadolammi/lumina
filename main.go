@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"sync"
-	"time"
 )
 
 func main() {
@@ -12,39 +11,37 @@ func main() {
 	// Topic: Buffered Channels
 	// Giving it a capacity of 10 means the sender can "burst" 10 items
 	// before it has to wait for a receiver.
-	logs := make(chan int, 10)
+
+	logsC := make(chan string, 10)
+
+	logSources := MockSource{
+		currentCount: 0, maxLogs: 50,
+	}
+	errorSource := ErrorSource{
+		Messages: make(chan string, 10),
+	}
 
 	// Here, we use an unbuffered channel to demonstrate blocking behavior.
 	// logs := make(chan int, 0)
 
-	// 1. Start 3 Workers
-	for i := range 3 {
+	// lets create a stats struct to keep track of processed logs
+	stats := &Stats{}
+
+	// 1. Start 5 Workers
+	for i := range 10 {
 		wg.Add(1)
-		go worker(i, logs, &wg)
+		go worker(i, logsC, &wg, stats)
 	}
 
-	// 2. The Producer (Main) sends 30 logs
-	for i := range 30 {
-		logs <- i
-		fmt.Printf("Main: Sent log %d to channel\n", i)
-	}
+	// Simulate sending errors to the ErrorSource in a separate goroutine
+	go SendErrorToSource(50, &errorSource)
 
-	// 3. Close the channel so workers know no more data is coming
-	close(logs)
+	produceLogs(&logSources, logsC)
+	produceLogs(&errorSource, logsC)
+	// close(logsC)
+
+	// Wait for all workers to finish
 
 	wg.Wait()
-	fmt.Println("Lumina: All logs processed successfully.")
-}
-
-// worker is our "Analyzer"
-func worker(id int, logs <-chan int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	// The 'range' loop over a channel is the best way to drain it.
-	// It automatically stops when the channel is closed.
-	for logID := range logs {
-		fmt.Printf("Worker %d: Processing log %d\n", id, logID)
-		time.Sleep(50 * time.Millisecond) // Simulating work
-	}
-	fmt.Printf("Worker %d: Shutting down...\n", id)
+	fmt.Println("Lumina: All logs processed successfully. Total processed logs:", stats.logsProcessed)
 }
